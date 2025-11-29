@@ -102,7 +102,7 @@ void TetModel::attachVisMesh(const ParticleData &pd)
  	const Vector3r *normals = m_surfaceMesh.getVertexNormals().data();
 
 	// for each point find nearest triangle (TODO: optimize)
-	const int nNearstT = nFaces;
+	const int nNearstT = 15;
 	m_attachments.resize(m_visVertices.size());
 
 	#pragma omp parallel default(shared)
