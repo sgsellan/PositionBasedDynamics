@@ -91,160 +91,227 @@ void TetModel::updateMeshNormals(const ParticleData &pd)
 	m_surfaceMesh.updateVertexNormals(pd);
 }
 
+// void TetModel::attachVisMesh(const ParticleData &pd)
+// {
+// 	const Real eps = static_cast<Real>(1.0e-6);
+
+// 	// The created surface mesh defines the boundary of the tet mesh
+// 	unsigned int *faces = m_surfaceMesh.getFaces().data();
+// 	const unsigned int nFaces = m_surfaceMesh.numFaces();
+
+//  	const Vector3r *normals = m_surfaceMesh.getVertexNormals().data();
+
+// 	// for each point find nearest triangle (TODO: optimize)
+// 	const int nNearstT = 15;
+// 	m_attachments.resize(m_visVertices.size());
+
+// 	#pragma omp parallel default(shared)
+// 	{
+// 		#pragma omp for schedule(static)  
+// 		for (int i = 0; i < (int)m_visVertices.size(); i++)
+// 		{
+// 			const Vector3r &p = m_visVertices.getPosition(i);
+// 			Real curDist[nNearstT];
+// 			int curT[nNearstT];
+// 			for (int k = 0; k < nNearstT; k++)
+// 			{
+// 				curDist[k] = REAL_MAX;
+// 				curT[k] = -1;
+// 			}
+// 			Vector3r curBary[nNearstT];
+// 			Vector3r curInter[nNearstT];
+// 			for (unsigned int j = 0; j < nFaces; j++)
+// 			{
+// 				const unsigned int indexA = faces[3 * j] + m_indexOffset;
+// 				const unsigned int indexB = faces[3 * j + 1] + m_indexOffset;
+// 				const unsigned int indexC = faces[3 * j + 2] + m_indexOffset;
+// 				const Vector3r & a = pd.getPosition0(indexA);
+// 				const Vector3r & b = pd.getPosition0(indexB);
+// 				const Vector3r & c = pd.getPosition0(indexC);
+
+// 				Vector3r inter, bary;
+// 				// compute nearest point on triangle
+// 				if (pointInTriangle(a, b, c, p, inter, bary))
+// 				{
+// 					Real len = (p - inter).norm();
+// 					for (int k = nNearstT - 1; k >= 0; k--) // update the best triangles
+// 					{
+// 						if (len < curDist[k])
+// 						{
+// 							if (k < nNearstT - 1)
+// 							{
+// 								curDist[k + 1] = curDist[k];
+// 								curBary[k + 1] = curBary[k];
+// 								curT[k + 1] = curT[k];
+// 								curInter[k + 1] = curInter[k];
+// 							}
+// 							curDist[k] = len;
+// 							curBary[k] = bary;
+// 							curT[k] = (int)j;
+// 							curInter[k] = inter;
+// 						}
+// 					}
+// 				}
+// 			}
+// 			if (curT[0] == -1)
+// 			{
+// 				LOG_ERR << "ERROR: vertex has no nearest triangle.";
+// 				continue;
+// 			}
+
+// 			// take the best bary coords we find from the best 5 triangles
+// 			Real error = REAL_MAX;
+// 			int current_k = 0;
+// 			Real current_dist = 0.0;
+// 			Vector3r current_bary;
+// 			for (int k = 0; k < nNearstT; k++)
+// 			{
+// 				if (curT[k] == -1)
+// 					break;
+
+// 				// see Kobbelt: Multiresolution Herarchies on unstructured triangle meshes
+// 				const Vector3r& p = m_visVertices.getPosition(i);
+// 				const Vector3r n1 = -normals[faces[3 * curT[k] + 0]];
+// 				const Vector3r n2 = -normals[faces[3 * curT[k] + 1]];
+// 				const Vector3r n3 = -normals[faces[3 * curT[k] + 2]];
+// 				const Vector3r& p1 = pd.getPosition0(faces[3 * curT[k] + 0] + m_indexOffset);
+// 				const Vector3r& p2 = pd.getPosition0(faces[3 * curT[k] + 1] + m_indexOffset);
+// 				const Vector3r& p3 = pd.getPosition0(faces[3 * curT[k] + 2] + m_indexOffset);
+// 				const Vector3r U = p.cross(n1);
+// 				const Vector3r V = p.cross(n2);
+// 				const Vector3r W = p.cross(n3);
+// 				const Vector3r UU = n1.cross(p1);
+// 				const Vector3r VV = n2.cross(p2);
+// 				const Vector3r WW = n3.cross(p3);
+// 				const Vector3r UV = (n2.cross(p1)) + (n1.cross(p2));
+// 				const Vector3r UW = (n3.cross(p1)) + (n1.cross(p3));
+// 				const Vector3r VW = (n3.cross(p2)) + (n2.cross(p3));
+// 				// F(u,v) = F + Fu*u + Fv*v + Fuu*u*u + Fuv*u*v + Fvv*v*v == 0!
+// 				const Vector3r F = W + WW;
+// 				const Vector3r Fu = U + UW - W - WW * 2.0;
+// 				const Vector3r Fv = V + VW - W - WW * 2.0;
+// 				const Vector3r Fuu = UU - UW + WW;
+// 				const Vector3r Fuv = UV - UW - VW + WW * 2.0;
+// 				const Vector3r Fvv = VV - VW + WW;
+// 				Real u = curBary[k][0];
+// 				Real v = curBary[k][0];
+// 				solveQuadraticForZero(F, Fu, Fv, Fuu, Fuv, Fvv, u, v);
+// 				Real w = static_cast<Real>(1.0) - u - v;
+
+// 				if (u < 0) u = 0.0;
+// 				if (u > 1) u = 1.0;
+// 				if (v < 0) v = 0.0;
+// 				if (v > 1) v = 1.0;
+// 				if (u + v > 1)
+// 				{
+// 					Real uv = u + v;
+// 					Real u_ = u;
+// 					Real v_ = v;
+// 					u -= (uv - static_cast<Real>(1.0))*v_ / uv;
+// 					v -= (uv - static_cast<Real>(1.0))*u_ / uv;
+// 				}
+// 				w = static_cast<Real>(1.0) - u - v;
+// 				Vector3r curInter = p1*u + p2*v + p3*w;
+// 				Real dist = (p - curInter).norm();
+
+// 				Vector3r n = n1*u + n2*v + n3*w;
+// 				Real err = dist;
+// 				if ((p - curInter).dot(n) < 0.0)
+// 					dist *= -1.0;
+// 				Vector3r interP = curInter + n*dist;
+// 				err += (interP - p).norm();
+
+// 				if (err > error)
+// 					continue;
+
+// 				error = err;
+
+// 				current_k = k;
+// 				current_dist = dist;
+// 				current_bary = Vector3r(u, v, w);
+
+// 				if (error < eps)
+// 					break;
+// 			}
+
+
+// 			Attachment &fp = m_attachments[i];
+// 			fp.m_index = i;
+// 			fp.m_triIndex = (unsigned int)curT[current_k];
+// 			fp.m_bary[0] = current_bary.x();
+// 			fp.m_bary[1] = current_bary.y();
+// 			fp.m_bary[2] = current_bary.z();
+// 			fp.m_dist = current_dist;
+// 			fp.m_minError = error;
+// 		}
+// 	}
+// }
+
 void TetModel::attachVisMesh(const ParticleData &pd)
 {
-	const Real eps = static_cast<Real>(1.0e-6);
+    const Real eps = static_cast<Real>(1.0e-6);
 
-	// The created surface mesh defines the boundary of the tet mesh
-	unsigned int *faces = m_surfaceMesh.getFaces().data();
-	const unsigned int nFaces = m_surfaceMesh.numFaces();
+    // Access tet connectivity
+    ParticleMesh &pm = m_particleMesh;
+    const ParticleMesh::Tets &tets = pm.getTets();
+    const unsigned int nTets = pm.numTets();
+    const unsigned int *tetIndices = tets.data();
 
- 	const Vector3r *normals = m_surfaceMesh.getVertexNormals().data();
+    m_attachments.resize(m_visVertices.size());
 
-	// for each point find nearest triangle (TODO: optimize)
-	const int nNearstT = 15;
-	m_attachments.resize(m_visVertices.size());
+#pragma omp parallel default(shared)
+    {
+#pragma omp for schedule(static)
+        for (int i = 0; i < (int)m_visVertices.size(); i++)
+        {
+            const Vector3r &p = m_visVertices.getPosition(i);
 
-	#pragma omp parallel default(shared)
-	{
-		#pragma omp for schedule(static)  
-		for (int i = 0; i < (int)m_visVertices.size(); i++)
-		{
-			const Vector3r &p = m_visVertices.getPosition(i);
-			Real curDist[nNearstT];
-			int curT[nNearstT];
-			for (int k = 0; k < nNearstT; k++)
-			{
-				curDist[k] = REAL_MAX;
-				curT[k] = -1;
-			}
-			Vector3r curBary[nNearstT];
-			Vector3r curInter[nNearstT];
-			for (unsigned int j = 0; j < nFaces; j++)
-			{
-				const unsigned int indexA = faces[3 * j] + m_indexOffset;
-				const unsigned int indexB = faces[3 * j + 1] + m_indexOffset;
-				const unsigned int indexC = faces[3 * j + 2] + m_indexOffset;
-				const Vector3r & a = pd.getPosition0(indexA);
-				const Vector3r & b = pd.getPosition0(indexB);
-				const Vector3r & c = pd.getPosition0(indexC);
+            bool found = false;
+            unsigned int bestTet = 0;
+            Real bestBary[4];
 
-				Vector3r inter, bary;
-				// compute nearest point on triangle
-				if (pointInTriangle(a, b, c, p, inter, bary))
-				{
-					Real len = (p - inter).norm();
-					for (int k = nNearstT - 1; k >= 0; k--) // update the best triangles
-					{
-						if (len < curDist[k])
-						{
-							if (k < nNearstT - 1)
-							{
-								curDist[k + 1] = curDist[k];
-								curBary[k + 1] = curBary[k];
-								curT[k + 1] = curT[k];
-								curInter[k + 1] = curInter[k];
-							}
-							curDist[k] = len;
-							curBary[k] = bary;
-							curT[k] = (int)j;
-							curInter[k] = inter;
-						}
-					}
-				}
-			}
-			if (curT[0] == -1)
-			{
-				LOG_ERR << "ERROR: vertex has no nearest triangle.";
-				continue;
-			}
+            for (unsigned int t = 0; t < nTets; t++)
+            {
+                const unsigned int idx0 = tetIndices[4 * t + 0] + m_indexOffset;
+                const unsigned int idx1 = tetIndices[4 * t + 1] + m_indexOffset;
+                const unsigned int idx2 = tetIndices[4 * t + 2] + m_indexOffset;
+                const unsigned int idx3 = tetIndices[4 * t + 3] + m_indexOffset;
 
-			// take the best bary coords we find from the best 5 triangles
-			Real error = REAL_MAX;
-			int current_k = 0;
-			Real current_dist = 0.0;
-			Vector3r current_bary;
-			for (int k = 0; k < nNearstT; k++)
-			{
-				if (curT[k] == -1)
-					break;
+                const Vector3r &x0 = pd.getPosition0(idx0);
+                const Vector3r &x1 = pd.getPosition0(idx1);
+                const Vector3r &x2 = pd.getPosition0(idx2);
+                const Vector3r &x3 = pd.getPosition0(idx3);
 
-				// see Kobbelt: Multiresolution Herarchies on unstructured triangle meshes
-				const Vector3r& p = m_visVertices.getPosition(i);
-				const Vector3r n1 = -normals[faces[3 * curT[k] + 0]];
-				const Vector3r n2 = -normals[faces[3 * curT[k] + 1]];
-				const Vector3r n3 = -normals[faces[3 * curT[k] + 2]];
-				const Vector3r& p1 = pd.getPosition0(faces[3 * curT[k] + 0] + m_indexOffset);
-				const Vector3r& p2 = pd.getPosition0(faces[3 * curT[k] + 1] + m_indexOffset);
-				const Vector3r& p3 = pd.getPosition0(faces[3 * curT[k] + 2] + m_indexOffset);
-				const Vector3r U = p.cross(n1);
-				const Vector3r V = p.cross(n2);
-				const Vector3r W = p.cross(n3);
-				const Vector3r UU = n1.cross(p1);
-				const Vector3r VV = n2.cross(p2);
-				const Vector3r WW = n3.cross(p3);
-				const Vector3r UV = (n2.cross(p1)) + (n1.cross(p2));
-				const Vector3r UW = (n3.cross(p1)) + (n1.cross(p3));
-				const Vector3r VW = (n3.cross(p2)) + (n2.cross(p3));
-				// F(u,v) = F + Fu*u + Fv*v + Fuu*u*u + Fuv*u*v + Fvv*v*v == 0!
-				const Vector3r F = W + WW;
-				const Vector3r Fu = U + UW - W - WW * 2.0;
-				const Vector3r Fv = V + VW - W - WW * 2.0;
-				const Vector3r Fuu = UU - UW + WW;
-				const Vector3r Fuv = UV - UW - VW + WW * 2.0;
-				const Vector3r Fvv = VV - VW + WW;
-				Real u = curBary[k][0];
-				Real v = curBary[k][0];
-				solveQuadraticForZero(F, Fu, Fv, Fuu, Fuv, Fvv, u, v);
-				Real w = static_cast<Real>(1.0) - u - v;
+                Real bary[4];
+                if (pointInTet(x0, x1, x2, x3, p, bary, eps))
+                {
+                    bestTet = t;
+                    bestBary[0] = bary[0];
+                    bestBary[1] = bary[1];
+                    bestBary[2] = bary[2];
+                    bestBary[3] = bary[3];
+                    found = true;
+                    break;  // first containing tet is fine
+                }
+            }
 
-				if (u < 0) u = 0.0;
-				if (u > 1) u = 1.0;
-				if (v < 0) v = 0.0;
-				if (v > 1) v = 1.0;
-				if (u + v > 1)
-				{
-					Real uv = u + v;
-					Real u_ = u;
-					Real v_ = v;
-					u -= (uv - static_cast<Real>(1.0))*v_ / uv;
-					v -= (uv - static_cast<Real>(1.0))*u_ / uv;
-				}
-				w = static_cast<Real>(1.0) - u - v;
-				Vector3r curInter = p1*u + p2*v + p3*w;
-				Real dist = (p - curInter).norm();
+            if (!found)
+            {
+                LOG_ERR << "ERROR: vertex " << i << " is not inside any tet.";
+                // You could optionally fall back to the old triangle code here.
+                continue;
+            }
 
-				Vector3r n = n1*u + n2*v + n3*w;
-				Real err = dist;
-				if ((p - curInter).dot(n) < 0.0)
-					dist *= -1.0;
-				Vector3r interP = curInter + n*dist;
-				err += (interP - p).norm();
-
-				if (err > error)
-					continue;
-
-				error = err;
-
-				current_k = k;
-				current_dist = dist;
-				current_bary = Vector3r(u, v, w);
-
-				if (error < eps)
-					break;
-			}
-
-
-			Attachment &fp = m_attachments[i];
-			fp.m_index = i;
-			fp.m_triIndex = (unsigned int)curT[current_k];
-			fp.m_bary[0] = current_bary.x();
-			fp.m_bary[1] = current_bary.y();
-			fp.m_bary[2] = current_bary.z();
-			fp.m_dist = current_dist;
-			fp.m_minError = error;
-		}
-	}
+            Attachment &att = m_attachments[i];
+            att.m_index   = i;
+            att.m_triIndex = bestTet;         // reinterpret as tet index
+            att.m_bary[0] = bestBary[0];      // store only first three
+            att.m_bary[1] = bestBary[1];
+            att.m_bary[2] = bestBary[2];
+            att.m_dist    = static_cast<Real>(0.0);  // no longer used
+            att.m_minError = static_cast<Real>(0.0); // no longer used
+        }
+    }
 }
  
 void TetModel::solveQuadraticForZero(const Vector3r& F, const Vector3r& Fu, const Vector3r& Fv, const Vector3r& Fuu,
@@ -282,46 +349,89 @@ void TetModel::solveQuadraticForZero(const Vector3r& F, const Vector3r& Fu, cons
 		v += H[1] * h1 + H[2] * h2;
 	}
 }
- 
+
 void TetModel::updateVisMesh(const ParticleData &pd)
 {
-	if (m_attachments.size() == 0)
-		return;
+    if (m_attachments.empty())
+        return;
 
-	// The collision mesh is the boundary of the tet mesh
-	unsigned int *faces = m_surfaceMesh.getFaces().data();
-	const unsigned int nFaces = m_surfaceMesh.numFaces();
+    const ParticleMesh::Tets &tets = m_particleMesh.getTets();
+    const unsigned int *tetIndices = tets.data();
 
-	const Vector3r *normals = m_surfaceMesh.getVertexNormals().data();
+#pragma omp parallel default(shared)
+    {
+#pragma omp for schedule(static)
+        for (int i = 0; i < (int)m_attachments.size(); i++)
+        {
+            const Attachment &att = m_attachments[i];
 
-	#pragma omp parallel default(shared)
-	{
-		#pragma omp for schedule(static)  
-		for (int i = 0; i < (int) m_attachments.size(); i++)
-		{
-			const unsigned int pindex = m_attachments[i].m_index;
-			const unsigned int triindex = m_attachments[i].m_triIndex;
-			const Real *bary = m_attachments[i].m_bary;
+            const unsigned int pindex   = att.m_index;
+            const unsigned int tetIndex = att.m_triIndex;    // now tet index
+            const Real *bary            = att.m_bary;
 
-			const unsigned int indexA = faces[3 * triindex] + m_indexOffset;
-			const unsigned int indexB = faces[3 * triindex + 1] + m_indexOffset;
-			const unsigned int indexC = faces[3 * triindex + 2] + m_indexOffset;
+            const unsigned int idx0 = tetIndices[4 * tetIndex + 0] + m_indexOffset;
+            const unsigned int idx1 = tetIndices[4 * tetIndex + 1] + m_indexOffset;
+            const unsigned int idx2 = tetIndices[4 * tetIndex + 2] + m_indexOffset;
+            const unsigned int idx3 = tetIndices[4 * tetIndex + 3] + m_indexOffset;
 
-			const Vector3r &a = pd.getPosition(indexA);
-			const Vector3r &b = pd.getPosition(indexB);
-			const Vector3r &c = pd.getPosition(indexC);
-			Vector3r p2 = bary[0] * a + bary[1] * b + bary[2] * c;
-			Vector3r n = bary[0] * normals[faces[3 * triindex]] + bary[1] * normals[faces[3 * triindex + 1]] + bary[2] * normals[faces[3 * triindex + 2]];
-			n.normalize();
+            const Vector3r &x0 = pd.getPosition(idx0);
+            const Vector3r &x1 = pd.getPosition(idx1);
+            const Vector3r &x2 = pd.getPosition(idx2);
+            const Vector3r &x3 = pd.getPosition(idx3);
 
-			Vector3r &p = m_visVertices.getPosition(pindex);
-			p = p2 - n*m_attachments[i].m_dist;
-		}
-	}
+            const Real w0 = bary[0];
+            const Real w1 = bary[1];
+            const Real w2 = bary[2];
+            const Real w3 = static_cast<Real>(1.0) - w0 - w1 - w2;
 
-	m_visMesh.updateNormals(m_visVertices, 0);
-	m_visMesh.updateVertexNormals(m_visVertices);
+            Vector3r p = w0 * x0 + w1 * x1 + w2 * x2 + w3 * x3;
+            m_visVertices.getPosition(pindex) = p;
+        }
+    }
+
+    m_visMesh.updateNormals(m_visVertices, 0);
+    m_visMesh.updateVertexNormals(m_visVertices);
 }
+ 
+// void TetModel::updateVisMesh(const ParticleData &pd)
+// {
+// 	if (m_attachments.size() == 0)
+// 		return;
+
+// 	// The collision mesh is the boundary of the tet mesh
+// 	unsigned int *faces = m_surfaceMesh.getFaces().data();
+// 	const unsigned int nFaces = m_surfaceMesh.numFaces();
+
+// 	const Vector3r *normals = m_surfaceMesh.getVertexNormals().data();
+
+// 	#pragma omp parallel default(shared)
+// 	{
+// 		#pragma omp for schedule(static)  
+// 		for (int i = 0; i < (int) m_attachments.size(); i++)
+// 		{
+// 			const unsigned int pindex = m_attachments[i].m_index;
+// 			const unsigned int triindex = m_attachments[i].m_triIndex;
+// 			const Real *bary = m_attachments[i].m_bary;
+
+// 			const unsigned int indexA = faces[3 * triindex] + m_indexOffset;
+// 			const unsigned int indexB = faces[3 * triindex + 1] + m_indexOffset;
+// 			const unsigned int indexC = faces[3 * triindex + 2] + m_indexOffset;
+
+// 			const Vector3r &a = pd.getPosition(indexA);
+// 			const Vector3r &b = pd.getPosition(indexB);
+// 			const Vector3r &c = pd.getPosition(indexC);
+// 			Vector3r p2 = bary[0] * a + bary[1] * b + bary[2] * c;
+// 			Vector3r n = bary[0] * normals[faces[3 * triindex]] + bary[1] * normals[faces[3 * triindex + 1]] + bary[2] * normals[faces[3 * triindex + 2]];
+// 			n.normalize();
+
+// 			Vector3r &p = m_visVertices.getPosition(pindex);
+// 			p = p2 - n*m_attachments[i].m_dist;
+// 		}
+// 	}
+
+// 	m_visMesh.updateNormals(m_visVertices, 0);
+// 	m_visMesh.updateVertexNormals(m_visVertices);
+// }
  
  
  bool TetModel::pointInTriangle(const Vector3r& p0, const Vector3r& p1, const Vector3r& p2, const Vector3r& p,
@@ -369,3 +479,37 @@ void TetModel::updateVisMesh(const ParticleData &pd)
  
  	return true;
  }
+
+
+ bool TetModel::pointInTet(
+    const Vector3r &x0,
+    const Vector3r &x1,
+    const Vector3r &x2,
+    const Vector3r &x3,
+    const Vector3r &p,
+    Real bary[4],
+    const Real eps)
+{
+    // Solve p = x0*w0 + x1*w1 + x2*w2 + x3*w3, sum wi = 1
+    // Use x3 as reference: p - x3 = [x0-x3, x1-x3, x2-x3] * [w0,w1,w2]^T
+    Matrix3r M;
+    M.col(0) = x0 - x3;
+    M.col(1) = x1 - x3;
+    M.col(2) = x2 - x3;
+    Vector3r rhs = p - x3;
+
+    const Real det = M.determinant();
+    if (fabs(det) < eps)
+        return false; // degenerate tet
+
+    Vector3r uvw = M.inverse() * rhs; // or M.fullPivLu().solve(rhs) if you prefer
+    bary[0] = uvw[0];
+    bary[1] = uvw[1];
+    bary[2] = uvw[2];
+    bary[3] = static_cast<Real>(1.0) - bary[0] - bary[1] - bary[2];
+
+    Real minb = std::min(std::min(bary[0], bary[1]), std::min(bary[2], bary[3]));
+    Real maxb = std::max(std::max(bary[0], bary[1]), std::max(bary[2], bary[3]));
+
+    return (minb >= -eps) && (maxb <= static_cast<Real>(1.0) + eps);
+}

@@ -56,6 +56,8 @@ namespace PBD
  				Real& u, Real& v);
  			bool pointInTriangle(const Vector3r& p0, const Vector3r& p1, const Vector3r& p2, 
  				const Vector3r& p, Vector3r& inter, Vector3r &bary);
+			bool pointInTet(const Vector3r &x0, const Vector3r &x1, const Vector3r &x2, const Vector3r &x3,
+                const Vector3r &p, Real bary[4], const Real eps);
 
 
 		public:
